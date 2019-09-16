@@ -11,12 +11,12 @@ odoo.define('web_google_maps.MapRenderer', function (require) {
 
     var qweb = core.qweb;
 
-    var MapRecord = KanbanRecord.extend({
-        init: function (parent, state, options) {
-            this._super.apply(this, arguments);
-            this.fieldsInfo = state.fieldsInfo.map;
-        }
-    });
+    var ICON_URL = '/web_google_maps/static/src/img/markers/';
+    var MARKER_COLORS = [
+        'green', 'yellow', 'blue', 'light-green',
+        'red', 'magenta', 'black', 'purple', 'orange',
+        'pink', 'grey', 'brown', 'cyan', 'white'
+    ];
 
     var MAP_THEMES = {
         'default': [],
@@ -797,11 +797,12 @@ odoo.define('web_google_maps.MapRenderer', function (require) {
         ]
     }
 
-    var markerColors = [
-        'green', 'yellow', 'blue', 'light-green',
-        'red', 'magenta', 'black', 'purple', 'orange',
-        'pink', 'grey', 'brown', 'cyan', 'white'
-    ];
+    var MapRecord = KanbanRecord.extend({
+        init: function (parent, state, options) {
+            this._super.apply(this, arguments);
+            this.fieldsInfo = state.fieldsInfo.map;
+        }
+    });
 
     function findInNode(node, predicate) {
         if (predicate(node)) {
@@ -914,7 +915,6 @@ odoo.define('web_google_maps.MapRenderer', function (require) {
             } else if (this.mapLibrary === 'geometry') {
                 this.defaultMarkerColor = 'red';
                 this.markerGroupedInfo = [];
-                this.iconColors = markerColors;
                 this.markers = [];
                 this.iconUrl = '/web_google_maps/static/src/img/markers/';
                 this.fieldLat = params.fieldLat;
@@ -928,7 +928,7 @@ odoo.define('web_google_maps.MapRenderer', function (require) {
          * @override
          */
         updateState: function (state) {
-            this.state = state;
+            this._setState(state);
             return this._super.apply(this, arguments);
         },
         /**
@@ -951,8 +951,6 @@ odoo.define('web_google_maps.MapRenderer', function (require) {
                 self.gmap.setOptions({
                     mapTypeControlOptions: {
                         mapTypeIds: ['roadmap', 'satellite', 'hybrid', 'terrain', 'styled_map'],
-                        style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
-                        position: google.maps.ControlPosition.TOP_CENTER
                     }
                 });
                 //Associate the styled map with the MapTypeId and set it to display.
@@ -1174,7 +1172,7 @@ odoo.define('web_google_maps.MapRenderer', function (require) {
             if (this.groupedMarkerColors.length) {
                 color = this.groupedMarkerColors.splice(0, 1)[0];
             } else {
-                this.groupedMarkerColors = _.extend([], this.iconColors);
+                this.groupedMarkerColors = _.extend([], MARKER_COLORS);
                 color = this.groupedMarkerColors.splice(0, 1)[0];
             }
             return color;
@@ -1300,9 +1298,9 @@ odoo.define('web_google_maps.MapRenderer', function (require) {
                 this.markerGroupedInfo.length = 0;
                 this._clearMarkerClusters();
                 this._renderMarkers();
+                this._clusterMarkers();
                 return this._super.apply(this, arguments)
                     .then(self._renderSidebarGroup.bind(self))
-                    .then(self._clusterMarkers.bind(self))
                     .then(self.mapGeometryCentered.bind(self));
             } else if (this.mapLibrary === 'drawing') {
                 this.shapesLatLng.length = 0;
@@ -1361,7 +1359,6 @@ odoo.define('web_google_maps.MapRenderer', function (require) {
          * @private
          */
         _renderSidebarGroup: function () {
-            var self = this;
             if (this.markerGroupedInfo.length > 0) {
                 this.$right_sidebar.empty().removeClass('closed').addClass('open');
                 var groupInfo = new SidebarGroup(this, {
