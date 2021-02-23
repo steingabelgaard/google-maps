@@ -1,15 +1,14 @@
-odoo.define('web_google_maps.MapController', function (require) {
+odoo.define('web_google_maps.GoogleMapController', function (require) {
     'use strict';
 
-    var Context = require('web.Context');
-    var core = require('web.core');
-    var BasicController = require('web.BasicController');
-    var Domain = require('web.Domain');
+    const Context = require('web.Context');
+    const core = require('web.core');
+    const BasicController = require('web.BasicController');
+    const Domain = require('web.Domain');
 
-    var _t = core._t;
-    var qweb = core.qweb;
+    const qweb = core.qweb;
 
-    var MapController = BasicController.extend({
+    const GoogleMapController = BasicController.extend({
         custom_events: _.extend({}, BasicController.prototype.custom_events, {
             button_clicked: '_onButtonClicked',
             kanban_record_delete: '_onRecordDelete',
@@ -37,8 +36,8 @@ odoo.define('web_google_maps.MapController', function (require) {
             }
         },
         _isEditMarkerInContext: function () {
-            var record = this.model.get(this.handle);
-            var context = record.getContext();
+            const record = this.model.get(this.handle);
+            const context = record.getContext();
             return context.edit_geo_field;
         },
         /**
@@ -47,15 +46,14 @@ odoo.define('web_google_maps.MapController', function (require) {
          * @param {Object} params
          */
         _reloadAfterButtonClick: function (kanbanRecord, params) {
-            var self = this;
-            var recordModel = this.model.localData[params.record.id];
-            var group = this.model.localData[recordModel.parentID];
-            var parent = this.model.localData[group.parentID];
-
-            this.model.reload(params.record.id).then(function (db_id) {
-                var data = self.model.get(db_id);
+            const recordModel = this.model.localData[params.record.id];
+            const group = this.model.localData[recordModel.parentID];
+            const parent = this.model.localData[group.parentID];
+    
+            this.model.reload(params.record.id).then((db_id) => {
+                const data = this.model.get(db_id);
                 kanbanRecord.update(data);
-
+    
                 // Check if we still need to display the record. Some fields of the domain are
                 // not guaranteed to be in data. This is for example the case if the action
                 // contains a domain on a field which is not in the Kanban view. Therefore,
@@ -63,14 +61,14 @@ odoo.define('web_google_maps.MapController', function (require) {
                 // domInData: all domain fields are in the data
                 // activeInDomain: 'active' is already in the domain
                 // activeInData: 'active' is available in the data
-
-                var domain = (parent ? parent.domain : group.domain) || [];
-                var domInData = _.every(domain, function (d) {
+    
+                const domain = (parent ? parent.domain : group.domain) || [];
+                const domInData = _.every(domain, function (d) {
                     return d[0] in data.data;
                 });
-                var activeInDomain = _.pluck(domain, 0).indexOf('active') !== -1;
-                var activeInData = 'active' in data.data;
-
+                const activeInDomain = _.pluck(domain, 0).indexOf('active') !== -1;
+                const activeInData = 'active' in data.data;
+    
                 // Case # | domInData | activeInDomain | activeInData
                 //   1    |   true    |      true      |      true     => no domain change
                 //   2    |   true    |      true      |      false    => not possible
@@ -80,18 +78,19 @@ odoo.define('web_google_maps.MapController', function (require) {
                 //   6    |   false   |      true      |      false    => no evaluation
                 //   7    |   false   |      false     |      true     => replace domain
                 //   8    |   false   |      false     |      false    => no evaluation
-
+    
                 // There are 3 cases which cannot be evaluated since we don't have all the
                 // necessary information. The complete solution would be to perform a RPC in
                 // these cases, but this is out of scope. A simpler one is to do a try / catch.
-
+    
                 if (domInData && !activeInDomain && activeInData) {
                     domain = domain.concat([['active', '=', true]]);
                 } else if (!domInData && !activeInDomain && activeInData) {
                     domain = [['active', '=', true]];
                 }
+                let visible = null;
                 try {
-                    var visible = new Domain(domain).compute(data.evalContext);
+                    visible = new Domain(domain).compute(data.evalContext);
                 } catch (e) {
                     return;
                 }
@@ -102,12 +101,13 @@ odoo.define('web_google_maps.MapController', function (require) {
         },
         /**
          * @private
-         * @param {OdooEvent} event
+         * @param {OdooEvent} ev
          */
-        _onButtonClicked: function (event) {
-            event.stopPropagation();
-            var attrs = event.data.attrs;
-            var record = event.data.record;
+        _onButtonClicked: function (ev) {
+            ev.stopPropagation();
+            const attrs = ev.data.attrs;
+            const record = ev.data.record;
+            const def = Promise.resolve();
             if (attrs.context) {
                 attrs.context = new Context(attrs.context).set_eval_context({
                     active_id: record.res_id,
@@ -115,15 +115,25 @@ odoo.define('web_google_maps.MapController', function (require) {
                     active_model: record.model,
                 });
             }
-            this.trigger_up('execute_action', {
-                action_data: attrs,
-                env: {
-                    context: record.getContext(),
-                    currentID: record.res_id,
-                    model: record.model,
-                    resIDs: record.res_ids,
-                },
-                on_closed: this._reloadAfterButtonClick.bind(this, event.target, event.data),
+            if (attrs.confirm) {
+                def = new Promise((resolve, reject) => {
+                    Dialog.confirm(this, attrs.confirm, {
+                        confirm_callback: resolve,
+                        cancel_callback: reject,
+                    }).on('closed', null, reject);
+                });
+            }
+            def.then(() => {
+                this.trigger_up('execute_action', {
+                    action_data: attrs,
+                    env: {
+                        context: record.getContext(),
+                        currentID: record.res_id,
+                        model: record.model,
+                        resIDs: record.res_ids,
+                    },
+                    on_closed: this._reloadAfterButtonClick.bind(this, ev.target, ev.data),
+                });
             });
         },
         /**
@@ -140,29 +150,37 @@ odoo.define('web_google_maps.MapController', function (require) {
          * @param {OdooEvent} ev
          */
         _onUpdateRecord: function (ev) {
-            var changes = _.clone(ev.data);
+            const onSuccess = ev.data.onSuccess;
+            delete ev.data.onSuccess;
+            const changes = _.clone(ev.data);
             ev.data.force_save = true;
-            this._applyChanges(ev.target.db_id, changes, ev);
+            this._applyChanges(ev.target.db_id, changes, ev).then(onSuccess);
         },
         /**
          * The interface allows in some case the user to archive a column. This is
          * what this handler is for.
          *
          * @private
-         * @param {OdooEvent} event
+         * @param {OdooEvent} ev
          */
-        _onArchiveRecords: function (event) {
-            var self = this;
-            var active_value = !event.data.archive;
-            var column = event.target;
-            var record_ids = _.pluck(column.records, 'db_id');
-            if (record_ids.length) {
-                this.model
-                    .toggleActive(record_ids, active_value, column.db_id)
-                    .then(function (db_id) {
-                        var data = self.model.get(db_id);
-                        self._updateEnv();
-                    });
+        _onArchiveRecords: async function (ev) {
+            const archive = ev.data.archive;
+            const column = ev.target;
+            const recordIds = _.pluck(column.records, 'id');
+            if (recordIds.length) {
+                const prom = archive
+                    ? this.model.actionArchive(recordIds, column.db_id)
+                    : this.model.actionUnarchive(recordIds, column.db_id);
+                prom.then((dbID) => {
+                    const data = this.model.get(dbID);
+                    if (data) {
+                        // Could be null if a wizard is returned for example
+                        this.model.reload(this.handle).then(() => {
+                            const state = this.model.get(this.handle);
+                            this.renderer.updateColumn(dbID, data, { state });
+                        });
+                    }
+                });
             }
         },
         /**
@@ -173,14 +191,14 @@ odoo.define('web_google_maps.MapController', function (require) {
             this._deleteRecords([event.data.id]);
         },
         _onUpdateRecord: function (ev) {
-            var changes = _.clone(ev.data);
+            const changes = _.clone(ev.data);
             ev.data.force_save = true;
             this._applyChanges(ev.target.db_id, changes, ev);
         },
         renderButtons: function ($node) {
             if (this.hasButtons) {
                 this.$buttons = $(
-                    qweb.render('MapView.buttons', {
+                    qweb.render('GoogleMapView.buttons', {
                         widget: this,
                     })
                 );
@@ -204,14 +222,14 @@ odoo.define('web_google_maps.MapController', function (require) {
             }
         },
         _isMarkerEditable: function () {
-            var is_editable =
+            const is_editable =
                 this.initialState.count === 1 && this.renderer.mapLibrary === 'geometry';
             return is_editable;
         },
         _onButtonMapCenter: function (event) {
             event.stopPropagation();
-            var func_name = '_map_center_' + this.renderer.mapMode;
-            this.renderer[func_name].call(this.renderer);
+            const func_name = '_map_center_' + this.renderer.mapMode;
+            this.renderer[func_name].call(this.renderer, true);
         },
         _onButtonNew: function (event) {
             event.stopPropagation();
@@ -227,9 +245,8 @@ odoo.define('web_google_maps.MapController', function (require) {
         },
         _onButtonSaveMarker: function (event) {
             event.stopPropagation();
-            var self = this;
-            var record = this.model.get(this.handle);
-            var marker_position = this.renderer.markers[0].getPosition();
+            const record = this.model.get(this.handle);
+            const marker_position = this.renderer.markers[0].getPosition();
             this.is_marker_edit = false;
 
             this._updateMarkerButtons();
@@ -244,11 +261,11 @@ odoo.define('web_google_maps.MapController', function (require) {
                         [this.renderer.fieldLng]: marker_position.lng(),
                     },
                 ],
-            }).then(function () {
-                self.renderer.disableMarkerDraggable();
-                self.reload();
-                setTimeout(function () {
-                    self.trigger_up('history_back');
+            }).then(() => {
+                this.renderer.disableMarkerDraggable();
+                this.reload();
+                setTimeout(() => {
+                    this.trigger_up('history_back');
                 }, 2000);
             });
         },
@@ -275,5 +292,5 @@ odoo.define('web_google_maps.MapController', function (require) {
         },
     });
 
-    return MapController;
+    return GoogleMapController;
 });

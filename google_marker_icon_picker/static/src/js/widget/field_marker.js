@@ -1,12 +1,12 @@
-odoo.define('google_marker_dynamic_color.MarkerColor', function (require) {
+odoo.define('google_marker_icon_picker.MarkerColor', function (require) {
     'use strict';
 
-    var core = require('web.core');
-    var AbstractField = require('web.AbstractField');
-    var registry = require('web.field_registry');
-    var qweb = core.qweb;
+    const core = require('web.core');
+    const AbstractField = require('web.AbstractField');
+    const registry = require('web.field_registry');
+    const qweb = core.qweb;
 
-    var MarkerColorPicker = AbstractField.extend({
+    const MarkerColorPicker = AbstractField.extend({
         tag_template: 'FieldMarkerColorPicker',
         className: 'o_field_char_marker_color',
         supportedFieldTypes: ['char'],
@@ -40,12 +40,11 @@ odoo.define('google_marker_dynamic_color.MarkerColor', function (require) {
 
         _onSelectMarker: function (ev) {
             ev.preventDefault();
-            var color = $(ev.currentTarget).attr('data-color');
-            var self = this;
+            const color = $(ev.currentTarget).attr('data-color');
             this.trigger_up('field_changed', {
-                dataPointID: self.dataPointID,
+                dataPointID: this.dataPointID,
                 changes: {
-                    [self.name]: color,
+                    [this.name]: color,
                 },
             });
         },
