@@ -111,6 +111,18 @@ odoo.define('web_google_maps.GoogleMapRenderer', function (require) {
     const GoogleMapRenderer = BasicRenderer.extend({
         className: 'o_google_map_view',
         template: 'GoogleMapView.MapView',
+        events: _.extend({}, BasicRenderer.prototype.events, {
+            'click .toggle_right_sidenav': 'onToggleRightSidenav',
+        }),
+        onToggleRightSidenav: function () {
+            this.$('.o_map_right_sidebar').toggleClass('closed').toggleClass('open');
+            this.$('.o_map_right_sidebar').find('.toggle_right_sidenav > button').toggleClass('closed');
+            if (this.$('.o_map_right_sidebar').hasClass('closed') && this.gmap) {
+                var current_center = this.gmap.getCenter();
+                google.maps.event.trigger(this.gmap, 'resize');
+                this.gmap.setCenter(current_center);
+            }
+        },
         /**
          * @override
          *
@@ -140,7 +152,10 @@ odoo.define('web_google_maps.GoogleMapRenderer', function (require) {
             });
             this.state = state;
             this.mapMode = params.map_mode ? params.map_mode : 'geometry';
-            this.gestureHandling = ['cooperative', 'greedy'].indexOf(params.gestureHandling) === -1 ? 'auto' : params.gestureHandling;
+            this.gestureHandling =
+                ['cooperative', 'greedy', 'none', 'auto'].indexOf(params.gestureHandling) === -1
+                    ? 'auto'
+                    : params.gestureHandling;
             this._initLibraryProperties(params);
         },
         /**
@@ -233,6 +248,12 @@ odoo.define('web_google_maps.GoogleMapRenderer', function (require) {
             if (!this.disableClusterMarker) {
                 this._initMarkerCluster();
             }
+            const $btn_geolocate_user = $(qweb.render('GoogleMapView.GeolocateUser', { widget: this }));
+            this.gmap.controls[google.maps.ControlPosition.RIGHT_BOTTOM].push($btn_geolocate_user.get(0));
+            $btn_geolocate_user.on('click', 'button', (ev) => {
+                ev.preventDefault();
+                this.trigger_up('geolocate_user_location', {});
+            });
         },
         /**
          *
@@ -458,10 +479,10 @@ odoo.define('web_google_maps.GoogleMapRenderer', function (require) {
          * Render list of `display_name` of records loaded in the map
          */
         _renderSidebar: function () {
-            this.sidebarRender = new GoogleMapSidebar(this, this.state.data);
-            const $rightSidebar = this.$('.o_map_right_sidebar');
+            const sidebarRender = new GoogleMapSidebar(this, this.state.data);
+            const $rightSidebar = this.$right_sidebar.find('.content');
             $rightSidebar.empty();
-            this.sidebarRender.appendTo($rightSidebar);
+            sidebarRender.appendTo($rightSidebar);
         },
     });
 
